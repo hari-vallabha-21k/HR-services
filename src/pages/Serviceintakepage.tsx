@@ -251,27 +251,38 @@ export default function ServiceIntakePage() {
 
         setIsSubmitting(true)
         try {
-            // Insert service request into Supabase
+            // Get actual service UUID from DB using slug
+            const { data: serviceRecord, error: serviceError } = await supabase
+                .from('services')
+                .select('id')
+                .eq('slug', selectedService.slug)
+                .single()
+                
+            if (serviceError || !serviceRecord) {
+                console.error("Service not found in database. You might need to seed the database first!", serviceError)
+                throw new Error("Service not configured in database yet.")
+            }
+
+            // Insert service request into Supabase using correct schema
             const { data, error } = await supabase
                 .from('service_requests')
                 .insert({
-                    user_id: user.id,
-                    service_type: selectedService.slug,
-                    service_title: selectedService.title,
-                    service_category: selectedService.category,
-                    service_price: selectedService.price,
-                    full_name: businessDetails.fullName,
-                    email: businessDetails.email,
-                    phone: businessDetails.phone,
-                    company_name: businessDetails.companyName,
-                    gst_number: businessDetails.gstNumber || null,
-                    address: businessDetails.address || null,
-                    city: businessDetails.city,
-                    state: businessDetails.state,
-                    pincode: businessDetails.pincode || null,
-                    additional_notes: businessDetails.additionalNotes || null,
-                    documents_count: uploadedFiles.length,
-                    status: 'pending'
+                    client_id: user.id,
+                    service_id: serviceRecord.id,
+                    status: 'submitted',
+                    form_data: {
+                        full_name: businessDetails.fullName,
+                        email: businessDetails.email,
+                        phone: businessDetails.phone,
+                        company_name: businessDetails.companyName,
+                        gst_number: businessDetails.gstNumber || null,
+                        address: businessDetails.address || null,
+                        city: businessDetails.city,
+                        state: businessDetails.state,
+                        pincode: businessDetails.pincode || null,
+                        additional_notes: businessDetails.additionalNotes || null,
+                        documents_count: uploadedFiles.length,
+                    }
                 })
                 .select('id')
                 .single()
@@ -282,9 +293,11 @@ export default function ServiceIntakePage() {
             if (uploadedFiles.length > 0) {
                 for (const uploadedFile of uploadedFiles) {
                     const filePath = `${user.id}/${data.id}/${uploadedFile.name}`
-                    await supabase.storage
+                    const { error: uploadError } = await supabase.storage
                         .from('service-documents')
                         .upload(filePath, uploadedFile.file)
+                    
+                    if (uploadError) throw uploadError
                 }
             }
 
@@ -292,9 +305,8 @@ export default function ServiceIntakePage() {
             setIsSubmitted(true)
         } catch (err) {
             console.error('Submission error:', err)
-            // Still show success for demo purposes even if Supabase table doesn't exist yet
-            setSubmittedId('SR-' + Date.now().toString().slice(-6))
-            setIsSubmitted(true)
+            // Removed the fake success fallback. Now we alert the error
+            alert(err instanceof Error ? err.message : 'Error submitting request. Check the console.')
         } finally {
             setIsSubmitting(false)
         }

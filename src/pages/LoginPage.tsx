@@ -22,8 +22,6 @@ const signUpSchema = z.object({
   path: ['confirmPassword']
 })
 
-type LoginFormData = z.infer<typeof loginSchema>
-type SignUpFormData = z.infer<typeof signUpSchema>
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -57,17 +55,27 @@ export default function LoginPage() {
   
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, loading } = useAuth()
+  const { user, role, loading } = useAuth()
   
-  // Get the return URL from location state or default to dashboard
-  const from = (location.state as { from?: string })?.from || '/dashboard'
-
-  // Redirect if already logged in
+  // Redirect if already logged in (wait for role to load if it's not present yet)
   useEffect(() => {
-    if (!loading && user) {
-      navigate(from, { replace: true })
+    if (user && !loading && role !== undefined) {
+      // If there's a specific "from" location saved in state, go there
+      const savedFrom = (location.state as { from?: string })?.from
+      
+      if (savedFrom) {
+        // If an admin tries to access a client-only route, redirect to admin dashboard
+        if (role === 'admin' && savedFrom.startsWith('/dashboard')) {
+          navigate('/admin', { replace: true })
+        } else {
+          navigate(savedFrom, { replace: true })
+        }
+      } else {
+        // Otherwise use role-based default routing
+        navigate(role === 'admin' ? '/admin' : '/dashboard', { replace: true })
+      }
     }
-  }, [user, loading, navigate, from])
+  }, [user, role, loading, navigate, location.state])
 
   const handleGoogleLogin = async () => {
     setIsLoading(true)
@@ -75,7 +83,8 @@ export default function LoginPage() {
     
     try {
       // Store the return URL for after OAuth redirect
-      const redirectUrl = from.startsWith('/') ? `${window.location.origin}${from}` : `${window.location.origin}/dashboard`
+      const savedFrom = (location.state as { from?: string })?.from || '/dashboard'
+      const redirectUrl = savedFrom.startsWith('/') ? `${window.location.origin}${savedFrom}` : `${window.location.origin}/dashboard`
       
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -141,7 +150,8 @@ export default function LoginPage() {
       }
       
       if (data.user) {
-        navigate(from, { replace: true })
+        // We don't navigate immediately here. We wait for AuthContext to fetch the role 
+        // and trigger the useEffect above which handles the intelligent routing.
       }
     } catch (err) {
       console.error('Login error:', err)
@@ -192,8 +202,7 @@ export default function LoginPage() {
 
       // If user is returned and session exists, auto sign-in worked
       if (data.user && data.session) {
-        // User is automatically signed in, redirect to intended destination
-        navigate(from, { replace: true })
+        // User is automatically signed in, wait for AuthContext to route
         return
       }
 
@@ -205,7 +214,8 @@ export default function LoginPage() {
         })
 
         if (!signInError) {
-          navigate(from, { replace: true })
+          // We don't navigate immediately here. We wait for AuthContext to fetch the role 
+      // and trigger the useEffect above which handles the intelligent routing.
           return
         }
       }
@@ -231,7 +241,8 @@ export default function LoginPage() {
     
     try {
       // Store the return URL for after OAuth redirect
-      const redirectUrl = from.startsWith('/') ? `${window.location.origin}${from}` : `${window.location.origin}/dashboard`
+      const savedFrom = (location.state as { from?: string })?.from || '/dashboard'
+      const redirectUrl = savedFrom.startsWith('/') ? `${window.location.origin}${savedFrom}` : `${window.location.origin}/dashboard`
       
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

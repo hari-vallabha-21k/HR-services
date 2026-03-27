@@ -7,16 +7,16 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading } = useAuth()
+  const { user, role, loading } = useAuth()
   const location = useLocation()
 
   // Show loading spinner while checking auth status
-  if (loading) {
+  if (loading || (user && role === undefined)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-600 font-medium">Loading...</p>
+          <p className="text-gray-600 font-medium">Checking permissions...</p>
         </div>
       </div>
     )
@@ -26,6 +26,18 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (!user) {
     // Save the attempted URL for redirecting after login
     return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />
+  }
+
+  // Role-based route protection
+  const isAdminRoute = location.pathname.startsWith('/admin')
+  const isClientRoute = location.pathname.startsWith('/dashboard')
+
+  if (role === 'admin' && isClientRoute) {
+    return <Navigate to="/admin" replace />
+  }
+
+  if (role === 'client' && isAdminRoute) {
+    return <Navigate to="/dashboard" replace />
   }
 
   return <>{children}</>

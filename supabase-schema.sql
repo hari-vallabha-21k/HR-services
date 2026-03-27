@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS public.service_requests (
   client_id    UUID           NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   service_id   UUID           NOT NULL REFERENCES public.services(id) ON DELETE RESTRICT,
   status       request_status NOT NULL DEFAULT 'submitted',
+  form_data    JSONB          NOT NULL DEFAULT '{}'::jsonb,
   notes        TEXT,
   admin_notes  TEXT,                          -- only visible to admin
   assigned_to  UUID           REFERENCES public.profiles(id),  -- admin assigned

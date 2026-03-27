@@ -7,10 +7,11 @@ import {
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { z } from 'zod'
+import { supabase } from '../lib/supabase'
 
 // ==================== ZOD SCHEMAS ====================
 
-const ServiceStatusSchema = z.enum(['approved', 'filed', 'pending'])
+const ServiceStatusSchema = z.enum(['submitted', 'in_progress', 'in_review', 'completed', 'cancelled', 'approved', 'filed', 'pending'])
 const EventStatusSchema = z.enum(['pending', 'completed'])
 const DocumentTypeSchema = z.enum(['pdf', 'docx', 'xlsx', 'zip'])
 const EventColorSchema = z.enum(['orange', 'green', 'blue', 'gray'])
@@ -254,6 +255,43 @@ export default function ClientDashboard() {
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
 
+  useEffect(() => {
+    if (user?.id) {
+      fetchServiceRequests()
+    }
+  }, [user])
+
+  const fetchServiceRequests = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('service_requests')
+        .select(`
+          id,
+          status,
+          created_at,
+          services:service_id (name, description, category)
+        `)
+        .eq('client_id', user!.id)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      if (data) {
+        const mappedServices = data.map((req: any) => ({
+          id: req.id,
+          title: req.services?.name || 'Custom Service',
+          description: req.services?.description || req.services?.category || 'Service details are being retrieved.',
+          status: req.status,
+          updatedAt: new Date(req.created_at).toLocaleDateString(),
+          image: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=800"
+        }))
+        setActiveServices(mappedServices)
+      }
+    } catch (err) {
+      console.error('Error fetching service requests:', err)
+    }
+  }
+
   // ==================== CRUD OPERATIONS ====================
 
   // Remove active service
@@ -289,8 +327,13 @@ export default function ClientDashboard() {
   const getStatusBadge = (status: string) => {
     const styles = {
       approved: 'bg-green-100 text-green-700',
+      completed: 'bg-green-100 text-green-700',
       filed: 'bg-blue-100 text-blue-700',
-      pending: 'bg-yellow-100 text-yellow-700'
+      in_review: 'bg-blue-100 text-blue-700',
+      pending: 'bg-yellow-100 text-yellow-700',
+      submitted: 'bg-yellow-100 text-yellow-700',
+      in_progress: 'bg-purple-100 text-purple-700',
+      cancelled: 'bg-red-100 text-red-700'
     }
     return styles[status as keyof typeof styles] || styles.pending
   }
