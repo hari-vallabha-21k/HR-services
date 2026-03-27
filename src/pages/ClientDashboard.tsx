@@ -6,7 +6,6 @@ import {
 } from 'lucide-react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabase'
 import { z } from 'zod'
 
 // ==================== ZOD SCHEMAS ====================
@@ -66,36 +65,6 @@ const validateAndFilterServices = (services: unknown[]): DashboardService[] => {
     const result = DashboardServiceSchema.safeParse(service)
     if (!result.success) {
       console.warn('Invalid service data:', result.error.issues)
-    }
-    return result.success
-  })
-}
-
-const validateAndFilterActiveServices = (services: unknown[]): ActiveService[] => {
-  return services.filter((service): service is ActiveService => {
-    const result = ActiveServiceSchema.safeParse(service)
-    if (!result.success) {
-      console.warn('Invalid active service data:', result.error.issues)
-    }
-    return result.success
-  })
-}
-
-const validateAndFilterEvents = (events: unknown[]): CalendarEvent[] => {
-  return events.filter((event): event is CalendarEvent => {
-    const result = CalendarEventSchema.safeParse(event)
-    if (!result.success) {
-      console.warn('Invalid calendar event data:', result.error.issues)
-    }
-    return result.success
-  })
-}
-
-const validateAndFilterDocuments = (docs: unknown[]): Document[] => {
-  return docs.filter((doc): doc is Document => {
-    const result = DocumentSchema.safeParse(doc)
-    if (!result.success) {
-      console.warn('Invalid document data:', result.error.issues)
     }
     return result.success
   })
@@ -280,92 +249,16 @@ export default function ClientDashboard() {
     return user?.user_metadata?.company_name || 'Business Owner'
   }
 
-  // Raw initial data - will be validated
-  const initialActiveServices = [
-    {
-      id: '1',
-      title: 'GST Registration',
-      description: 'Goods and Services Tax registration for digital products.',
-      status: 'pending',
-      updatedAt: 'Just started',
-      image: 'abstract'
-    }
-  ]
+  // Start with empty state — data will come from Supabase
+  const [activeServices, setActiveServices] = useState<ActiveService[]>([])
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
+  const [documents, setDocuments] = useState<Document[]>([])
 
-  const initialCalendarEvents = [
-    {
-      id: '1',
-      date: 15,
-      title: 'GST Filing Deadline',
-      description: 'Monthly GST return submission deadline.',
-      status: 'pending',
-      color: 'orange'
-    },
-    {
-      id: '2',
-      date: 20,
-      title: 'TDS Payment Due',
-      description: 'Tax Deducted at Source payment deadline.',
-      status: 'pending',
-      color: 'blue'
-    }
-  ]
-
-  const initialDocuments = [
-    { id: '1', name: 'PAN_Card.pdf', uploadedAt: '2h ago', size: '1.2 MB', type: 'pdf' },
-    { id: '2', name: 'Aadhar_Card.pdf', uploadedAt: 'yesterday', size: '2.1 MB', type: 'pdf' },
-    { id: '3', name: 'Bank_Statement.xlsx', uploadedAt: '3 days ago', size: '840 KB', type: 'xlsx' }
-  ]
-
-  // Validated state with proper typing
-  const [activeServices, setActiveServices] = useState<ActiveService[]>(() => 
-    validateAndFilterActiveServices(initialActiveServices)
-  )
-
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => 
-    validateAndFilterEvents(initialCalendarEvents)
-  )
-
-  const [documents, setDocuments] = useState<Document[]>(() => 
-    validateAndFilterDocuments(initialDocuments)
-  )
-
-  // ==================== CRUD OPERATIONS WITH VALIDATION ====================
-
-  // Add new active service
-  const addActiveService = useCallback((serviceData: Omit<ActiveService, 'id'>) => {
-    const newService = { ...serviceData, id: Date.now().toString() }
-    const result = ActiveServiceSchema.safeParse(newService)
-    if (result.success) {
-      setActiveServices(prev => [...prev, result.data])
-      return { success: true, data: result.data }
-    }
-    console.error('Invalid service data:', result.error.issues)
-    return { success: false, errors: result.error.issues }
-  }, [])
+  // ==================== CRUD OPERATIONS ====================
 
   // Remove active service
   const removeActiveService = useCallback((serviceId: string) => {
     setActiveServices(prev => prev.filter(s => s.id !== serviceId))
-  }, [])
-
-  // Update active service status
-  const updateServiceStatus = useCallback((serviceId: string, status: ActiveService['status']) => {
-    setActiveServices(prev => prev.map(s => 
-      s.id === serviceId ? { ...s, status, updatedAt: 'Just now' } : s
-    ))
-  }, [])
-
-  // Add calendar event
-  const addCalendarEvent = useCallback((eventData: Omit<CalendarEvent, 'id'>) => {
-    const newEvent = { ...eventData, id: Date.now().toString() }
-    const result = CalendarEventSchema.safeParse(newEvent)
-    if (result.success) {
-      setCalendarEvents(prev => [...prev, result.data])
-      return { success: true, data: result.data }
-    }
-    console.error('Invalid event data:', result.error.issues)
-    return { success: false, errors: result.error.issues }
   }, [])
 
   // Remove calendar event
@@ -452,8 +345,7 @@ export default function ClientDashboard() {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))
   }
 
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                      'July', 'August', 'September', 'October', 'November', 'December']
+
 
   // Handle logout
   const handleLogout = async () => {
@@ -487,22 +379,11 @@ export default function ClientDashboard() {
     }
   }
 
-  // Handle search
-  const filteredServices = activeServices.filter(service =>
-    service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    service.description.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
   // Mark event as complete
   const markEventComplete = (eventId: string) => {
     setCalendarEvents(calendarEvents.map(event =>
       event.id === eventId ? { ...event, status: 'completed' as const } : event
     ))
-  }
-
-  // Download document (simulated)
-  const downloadDocument = (doc: Document) => {
-    alert(`Downloading ${doc.name}...`)
   }
 
   // Loading state
@@ -558,7 +439,6 @@ export default function ClientDashboard() {
               className="p-2 hover:bg-gray-100 rounded-lg relative"
             >
               <Bell className="w-5 h-5 text-gray-600" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
             
             {showNotifications && (
@@ -566,27 +446,9 @@ export default function ClientDashboard() {
                 <div className="p-4 border-b border-gray-100">
                   <h3 className="font-semibold text-gray-900">Notifications</h3>
                 </div>
-                <div className="max-h-64 overflow-y-auto">
-                  <div className="p-4 hover:bg-gray-50 border-b border-gray-100">
-                    <p className="text-sm text-gray-900 font-medium">GST Registration Update</p>
-                    <p className="text-xs text-gray-500 mt-1">Your GST application is pending review</p>
-                    <p className="text-xs text-gray-400 mt-1">2 hours ago</p>
-                  </div>
-                  <div className="p-4 hover:bg-gray-50 border-b border-gray-100">
-                    <p className="text-sm text-gray-900 font-medium">Document Uploaded</p>
-                    <p className="text-xs text-gray-500 mt-1">Tax_Receipt_Q3.docx uploaded successfully</p>
-                    <p className="text-xs text-gray-400 mt-1">Yesterday</p>
-                  </div>
-                  <div className="p-4 hover:bg-gray-50">
-                    <p className="text-sm text-gray-900 font-medium">Deadline Reminder</p>
-                    <p className="text-xs text-gray-500 mt-1">VAT Filing deadline in 10 days</p>
-                    <p className="text-xs text-gray-400 mt-1">3 days ago</p>
-                  </div>
-                </div>
-                <div className="p-3 border-t border-gray-100">
-                  <button className="w-full text-sm text-primary font-medium hover:underline">
-                    View all notifications
-                  </button>
+                <div className="p-8 text-center text-gray-400">
+                  <Bell className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No notifications yet</p>
                 </div>
               </div>
             )}
